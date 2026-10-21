@@ -833,22 +833,119 @@
       errorBanner.classList.add('hidden');
     }
 
-    /* TTS QUESTION NARRATION ENGINE (Web Speech API) */
+    /* TTS QUESTION NARRATION ENGINE (Web Speech API with iOS/iPhone Mobile Fix) */
+    let availableVoices = [];
+    let isIosSpeechUnlocked = false;
+
+    function populateVoices() {
+      if (!('speechSynthesis' in window)) return;
+      availableVoices = window.speechSynthesis.getVoices();
+    }
+    populateVoices();
+    if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+    }
+
+    // iOS/WebKit 必须在用户手势点击事件中预先激活语音引擎（Unlock）
+    function unlockIosSpeech() {
+      if (!('speechSynthesis' in window) || isIosSpeechUnlocked) return;
+      try {
+        const dummyUtter = new SpeechSynthesisUtterance('');
+        dummyUtter.volume = 0;
+        window.speechSynthesis.speak(dummyUtter);
+        isIosSpeechUnlocked = true;
+      } catch (e) {
+        console.warn("Speech unlock failed:", e);
+      }
+    }
+
     function speakQuestion(text) {
       if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel(); // Stop any existing speech
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'zh-CN';
-      utter.rate = 1.05;
-      utter.pitch = 1.0;
+      try {
+        // 先暂停或取消之前的朗读，防止重叠
+        window.speechSynthesis.cancel();
 
-      // Select natural Chinese voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const zhVoice = voices.find(v => v.lang.includes('zh') || v.lang.includes('cmn'));
-      if (zhVoice) {
-        utter.voice = zhVoice;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-CN';
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+
+        if (availableVoices.length === 0) {
+          availableVoices = window.speechSynthesis.getVoices();
+        }
+
+        // 优先匹配 iOS 及各浏览器的中文语音（zh-CN, zh-Hans, zh-HK, zh-TW 等）
+        const zhVoice = availableVoices.find(v => 
+          v.lang && (
+            v.lang.toLowerCase().includes('zh-cn') ||
+            v.lang.toLowerCase().includes('cmn') ||
+            v.lang.toLowerCase().includes('zh-hans') ||
+            v.lang.toLowerCase().startsWith('zh')
+          )
+        );
+        if (zhVoice) {
+          utter.voice = zhVoice;
+        }
+
+        // iOS Chrome/Safari 偶尔在后台挂起 speechSynthesis，尝试 resume()
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        // 延迟 50ms 触发，确保在移动端 DOM 切换与 cancel() 清除后顺利发声
+        setTimeout(() => {
+          window.speechSynthesis.speak(utter);
+        }, 50);
+      } catch (err) {
+        console.warn("TTS error:", err);
       }
-      window.speechSynthesis.speak(utter);
+    }
+
+    // 格式化用时为标准“几分几秒”格式（例如：2分34秒 或 45秒）
+    function formatTimeChinese(seconds) {
+      const sec = Math.max(0, parseInt(seconds, 10) || 0);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      if (m > 0) {
+        return `${m}分${s}秒`;
+      }
+      return `${s}秒`;
+    }
+
+    // 智能解析各种可能的时间来源（包括 02:34 冒号格式、带日期的字符串、纯秒数等）
+    function parseDurationToChinese(val, durationSeconds) {
+      if (durationSeconds !== undefined && durationSeconds !== null && !isNaN(durationSeconds) && Number(durationSeconds) > 0) {
+        return formatTimeChinese(durationSeconds);
+      }
+      if (typeof val === 'number') {
+        return formatTimeChinese(val);
+      }
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        // 如果原本就是包含“分”或“秒”的中文格式
+        if (trimmed.includes('分') || trimmed.includes('秒')) {
+          return trimmed;
+        }
+        // 如果是 02:34 或者 2:34 这种 mm:ss 格式
+        if (trimmed.includes(':')) {
+          const parts = trimmed.split(':');
+          if (parts.length === 2) {
+            const m = parseInt(parts[0], 10) || 0;
+            const s = parseInt(parts[1], 10) || 0;
+            return formatTimeChinese(m * 60 + s);
+          } else if (parts.length === 3) {
+            const m = parseInt(parts[1], 10) || 0;
+            const s = parseInt(parts[2], 10) || 0;
+            return formatTimeChinese(m * 60 + s);
+          }
+        }
+        // 如果是纯整数字符串
+        const num = parseInt(trimmed, 10);
+        if (!isNaN(num)) {
+          return formatTimeChinese(num);
+        }
+      }
+      return "0秒";
     }
 
     function formatTime(totalSec) {
@@ -859,11 +956,11 @@
 
     /* LEADERBOARD DATA: In-Memory / Local Cache Fallback */
     let localLeaderboardCache = [
-      { name: "张子涵", className: "5A", score: 3200, durationSeconds: 154, durationText: "02:34" },
-      { name: "陈俊杰", className: "5 Merah", score: 2950, durationSeconds: 172, durationText: "02:52" },
-      { name: "Siti Nurhaliza", className: "5 Bijak", score: 2800, durationSeconds: 190, durationText: "03:10" },
-      { name: "黄伟伦", className: "5B", score: 2600, durationSeconds: 210, durationText: "03:30" },
-      { name: "Kavitha", className: "5A", score: 2400, durationSeconds: 225, durationText: "03:45" }
+      { name: "张子涵", className: "5A", score: 3200, durationSeconds: 154, durationText: "2分34秒" },
+      { name: "陈俊杰", className: "5 Merah", score: 2950, durationSeconds: 172, durationText: "2分52秒" },
+      { name: "Siti Nurhaliza", className: "5 Bijak", score: 2800, durationSeconds: 190, durationText: "3分10秒" },
+      { name: "黄伟伦", className: "5B", score: 2600, durationSeconds: 210, durationText: "3分30秒" },
+      { name: "Kavitha", className: "5A", score: 2400, durationSeconds: 225, durationText: "3分45秒" }
     ];
 
     // JSONP 动态加载跨域数据，彻底解决 Google Apps Script 的 CORS 问题
@@ -943,13 +1040,16 @@
         else if (idx === 1) rankBadge = `<span class="text-slate-300 font-black">🥈 2</span>`;
         else if (idx === 2) rankBadge = `<span class="text-amber-600 font-black">🥉 3</span>`;
 
+        // 确保统一转换并显示为“几分几秒”
+        const durationDisplay = parseDurationToChinese(item.durationText, item.durationSeconds);
+
         return `
           <tr class="hover:bg-slate-800/40 transition">
             <td class="py-1.5 px-3 text-center font-bold">${rankBadge}</td>
             <td class="py-1.5 px-3 font-semibold text-white">${item.name}</td>
             <td class="py-1.5 px-2 text-slate-400">${item.className}</td>
             <td class="py-1.5 px-3 text-right text-emerald-400 font-bold">${item.score}</td>
-            <td class="py-1.5 px-3 text-right text-sky-300 font-mono">${item.durationText || formatTime(item.durationSeconds)}</td>
+            <td class="py-1.5 px-3 text-right text-sky-300 font-mono">${durationDisplay}</td>
           </tr>
         `;
       }).join('');
@@ -1351,9 +1451,10 @@
       clearInterval(STATE.timerInterval);
 
       const timeText = formatTime(STATE.elapsedSeconds);
+      const chineseDuration = formatTimeChinese(STATE.elapsedSeconds);
       document.getElementById('finalScore').textContent = STATE.score;
       document.getElementById('finalCombo').textContent = `x${STATE.maxCombo}`;
-      document.getElementById('finalTime').textContent = timeText;
+      document.getElementById('finalTime').textContent = chineseDuration;
       
       const starRating = document.getElementById('starRating');
       const gradeFeedback = document.getElementById('gradeFeedback');
@@ -1372,14 +1473,14 @@
         gradeFeedback.textContent = "继续加油！多多复习温度计读数和热胀冷缩原理。";
       }
 
-      // Submit score to Google Sheets App Script / Local Cache
+      // Submit score to Google Sheets App Script / Local Cache (携带“几分几秒”格式)
       submitScoreToCloud({
         name: STATE.playerName,
         className: STATE.playerClass,
         score: STATE.score,
         total: GAME_QUESTIONS.length,
         durationSeconds: STATE.elapsedSeconds,
-        durationText: timeText
+        durationText: chineseDuration
       });
 
       gameOverModal.classList.remove('hidden');
@@ -1426,6 +1527,9 @@
     }
 
     async function startCameraAndGame() {
+      // 关键修复：在学生点击按钮的这一瞬间立即解锁 iOS 的音频和朗读权限
+      unlockIosSpeech();
+
       const nameInput = document.getElementById('inputStudentName').value.trim();
       const classInput = document.getElementById('inputStudentClass').value.trim();
 
