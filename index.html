@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="zh-MY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HEAT STRIKE - 五年级科学第六课《热》 - Created by MR WILLSON</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Orbitron & Inter & Noto Sans SC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+    .font-scifi {
+      font-family: 'Orbitron', monospace;
+    }
+
+    /* Video mirrored for natural hand interaction */
+    #webcam {
+      transform: scaleX(-1);
+      object-fit: cover;
+    }
+
+    /* Glassmorphism Sci-Fi Panels */
+    .hud-panel {
+      background: rgba(10, 15, 29, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(249, 115, 22, 0.4);
+      box-shadow: 0 0 25px rgba(234, 88, 12, 0.22), inset 0 0 15px rgba(249, 115, 22, 0.1);
+    }
+
+    .card-choice {
+      transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+      background: rgba(15, 23, 42, 0.85);
+      border: 2px solid rgba(249, 115, 22, 0.35);
+      backdrop-filter: blur(8px);
+    }
+    .card-choice.targeting {
+      border-color: #f97316;
+      background: rgba(234, 88, 12, 0.3);
+      transform: scale(1.03);
+      box-shadow: 0 0 25px rgba(249, 115, 22, 0.75);
+    }
+    .card-choice.matched {
+      border-color: #22c55e !important;
+      background: rgba(34, 197, 94, 0.35) !important;
+      color: #86efac !important;
+      transform: scale(1.0);
+    }
+    .card-choice.grabbed {
+      border-color: #38bdf8 !important;
+      background: rgba(14, 165, 233, 0.4) !important;
+      box-shadow: 0 0 30px rgba(56, 189, 248, 0.85) !important;
+    }
+
+    /* Reticle indicator */
+    #cursorReticle {
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transition: width 0.1s ease, height 0.1s ease;
+    }
+
+    /* Custom Table Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #f97316;
+      border-radius: 4px;
+    }
+  </style>
+
+  <!-- MediaPipe Tasks Vision CDN -->
+  <script type="module">
+    import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+    window.FilesetResolver = FilesetResolver;
+    window.HandLandmarker = HandLandmarker;
+    window.dispatchEvent(new Event('mediapipe-ready'));
+  </script>
+</head>
+<body class="bg-slate-950 text-white w-screen h-screen relative select-none overflow-hidden">
+
+  <!-- Fullscreen Mirror Webcam Background -->
+  <video id="webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full z-0 pointer-events-none"></video>
+
+  <!-- Dynamic Laser Lines, Sparks & Particles Canvas -->
+  <canvas id="fxCanvas" class="absolute inset-0 w-full h-full z-10 pointer-events-none"></canvas>
+
+  <!-- MAIN HUD INTERFACE (Active in game) -->
+  <div id="gameUI" class="hidden relative z-20 w-full h-full flex flex-col justify-between p-3 sm:p-4 pointer-events-none">
+    
+    <!-- TOP COMPACT BAR: Title, Progress, Score & Combo -->
+    <header class="w-full flex items-center justify-between hud-panel px-4 py-2 sm:py-2.5 rounded-2xl pointer-events-auto shadow-lg">
+      <div class="flex items-center space-x-3">
+        <div class="w-3 h-3 rounded-full bg-orange-500 animate-ping"></div>
+        <div>
+          <h1 class="font-scifi font-black tracking-widest text-base sm:text-xl text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-500">
+            HEAT STRIKE <span class="text-xs text-orange-300 font-normal">热能打击</span>
+          </h1>
+          <p class="text-[10px] sm:text-xs text-orange-200/80 font-medium tracking-wide">
+            五年级科学 · Created by <span class="text-amber-300 font-bold">MR WILLSON</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Player Info & Status HUD -->
+      <div class="flex items-center space-x-3 sm:space-x-6 text-center">
+        <div>
+          <span class="text-[9px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">选手</span>
+          <span id="hudPlayer" class="font-bold text-xs sm:text-sm text-amber-300 truncate max-w-[100px] inline-block">学生</span>
+        </div>
+
+        <div>
+          <span class="text-[9px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">关卡</span>
+          <span id="questionCounter" class="font-scifi font-bold text-xs sm:text-base text-orange-300">01 / 30</span>
+        </div>
+
+        <div>
+          <span class="text-[9px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">连击</span>
+          <span id="comboCounter" class="font-scifi font-bold text-xs sm:text-base text-amber-400">x0</span>
+        </div>
+
+        <div>
+          <span class="text-[9px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">用时</span>
+          <span id="timerCounter" class="font-scifi font-bold text-xs sm:text-base text-sky-400">00:00</span>
+        </div>
+
+        <div>
+          <span class="text-[9px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">得分</span>
+          <span id="scoreCounter" class="font-scifi font-extrabold text-sm sm:text-xl text-emerald-400">0000</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- QUESTION / PROMPT BANNER (Top-Center Compact, Clear Center) -->
+    <div id="questionContainer" class="w-full flex justify-center mt-2 pointer-events-none">
+      <div class="hud-panel max-w-2xl w-full px-5 py-2.5 rounded-2xl text-center border-t-2 border-orange-400 shadow-2xl">
+        <div id="questionTag" class="text-[11px] uppercase tracking-widest text-orange-400 font-scifi font-bold mb-0.5">
+          科学重点辨析
+        </div>
+        <p id="questionText" class="text-sm sm:text-lg font-bold text-slate-100 drop-shadow-md">
+          正在加载热能模块...
+        </p>
+        <p id="questionHint" class="text-[11px] text-amber-300/80 mt-0.5 italic">
+          使用食指对准答案悬停 0.6 秒进行激光击发。
+        </p>
+      </div>
+    </div>
+
+    <!-- CENTRAL PLAY AREA: Flank layout ensures student and hands stay visible in webcam center -->
+    <div id="playArea" class="relative flex-1 w-full my-2 pointer-events-none flex items-center justify-between px-2 sm:px-6">
+      <!-- Left Flank Targets -->
+      <div id="leftTargetZone" class="flex flex-col justify-center gap-2.5 w-5/12 sm:w-1/3 max-w-sm pointer-events-auto"></div>
+      
+      <!-- Center Holo Feedback Flash -->
+      <div id="feedbackHolo" class="hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-scifi text-2xl sm:text-3xl font-extrabold tracking-wider px-6 py-2 rounded-2xl border z-30 transition-all text-center"></div>
+
+      <!-- Right Flank Targets -->
+      <div id="rightTargetZone" class="flex flex-col justify-center gap-2.5 w-5/12 sm:w-1/3 max-w-sm pointer-events-auto text-right"></div>
+    </div>
+
+    <!-- COMPACT BOTTOM STATUS BAR -->
+    <footer class="w-full flex items-center justify-between text-[11px] text-slate-400 px-3 py-1 font-mono">
+      <span class="flex items-center gap-2">
+        <span id="camStatusDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+        <span id="camStatusText">热能感应系统准备就绪</span>
+      </span>
+      <span class="text-orange-400/80 hidden sm:inline">食指尖端跟踪传感器 ACTIVE · 0.6S 锁定</span>
+    </footer>
+  </div>
+
+  <!-- CUSTOM SCI-FI CURSOR RETICLE WITH 0.6S DWELL METER -->
+  <div id="cursorReticle" class="fixed top-0 left-0 w-16 h-16 pointer-events-none z-50 hidden">
+    <svg class="w-full h-full -rotate-90 filter drop-shadow-[0_0_8px_rgba(249,115,22,0.9)]" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="40" stroke="rgba(249, 115, 22, 0.3)" stroke-width="6" fill="none" />
+      <circle id="dwellProgressRing" cx="50" cy="50" r="40" stroke="#f97316" stroke-width="6" fill="none"
+              stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round" />
+    </svg>
+    <!-- Center Target Indicator -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="w-2.5 h-2.5 bg-amber-300 rounded-full shadow-[0_0_12px_#f97316]"></div>
+    </div>
+    <!-- Crossbars -->
+    <div class="absolute inset-0 flex items-center justify-between px-1">
+      <div class="w-1.5 h-0.5 bg-orange-400"></div>
+      <div class="w-1.5 h-0.5 bg-orange-400"></div>
+    </div>
+    <div class="absolute inset-0 flex flex-col items-center justify-between py-1">
+      <div class="w-0.5 h-1.5 bg-orange-400"></div>
+      <div class="w-0.5 h-1.5 bg-orange-400"></div>
+    </div>
+  </div>
+
+  <!-- FIRST SCREEN / LANDING PAGE: Name & Class Input + Leaderboard + Activate Button -->
+  <div id="startOverlay" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-5 overflow-y-auto">
+    <div class="hud-panel max-w-2xl w-full p-5 sm:p-7 rounded-3xl text-center border border-orange-500/50 shadow-[0_0_50px_rgba(234,88,12,0.35)] my-auto">
+      
+      <!-- Header Badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-400/40 text-orange-300 text-xs font-scifi font-bold mb-3">
+        <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+        五年级科学 第六课《热》互动学习系统
+      </div>
+
+      <h1 class="font-scifi font-black text-2xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-200 to-yellow-400 mb-0.5">
+        HEAT STRIKE
+      </h1>
+      <p class="text-xs sm:text-sm font-semibold text-orange-300 tracking-wider mb-4 uppercase font-mono">
+        Created by MR WILLSON
+      </p>
+
+      <!-- Input Section: Name & Class -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-left">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">学生姓名 (Student Name)</label>
+          <input type="text" id="inputStudentName" placeholder="例如：李明 / Tan Ah Meng" maxlength="25"
+                 class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-orange-400 text-white text-sm outline-none transition">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">班级 (Class)</label>
+          <input type="text" id="inputStudentClass" placeholder="例如：5A / 5 Merah" maxlength="20"
+                 class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-orange-400 text-white text-sm outline-none transition">
+        </div>
+      </div>
+
+      <!-- Gameplay Guidance Card -->
+      <div class="bg-slate-900/80 rounded-2xl p-3 text-xs text-slate-300 text-left space-y-1.5 mb-4 border border-slate-800">
+        <p class="flex items-center gap-2">
+          <span class="text-orange-400 font-bold">1.</span> 允许摄像头，用<span class="text-orange-300 font-bold">单手食指</span>对准屏幕控制激光准星。
+        </p>
+        <p class="flex items-center gap-2">
+          <span class="text-orange-400 font-bold">2.</span> 指向选项并<span class="text-amber-400 font-bold">保持 0.6 秒 (Dwell)</span> 即可自动击发答题。
+        </p>
+        <p class="flex items-center gap-2">
+          <span class="text-orange-400 font-bold">3.</span> 特殊连线题：在左侧按住<span class="text-sky-300 font-bold">抓取 (Grab)</span>，划到右侧按住匹配！
+        </p>
+      </div>
+
+      <!-- Activate Camera and Start Button -->
+      <button id="activateCamBtn" class="w-full py-3.5 px-6 rounded-2xl font-scifi font-extrabold text-base tracking-wider text-slate-950 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 hover:from-orange-300 hover:to-yellow-300 transform active:scale-95 transition-all shadow-[0_0_30px_rgba(249,115,22,0.7)] cursor-pointer">
+        ACTIVATE CAMERA · 启动热能系统
+      </button>
+
+      <p id="loadingStatusText" class="text-xs text-orange-400/90 mt-2 font-mono h-4"></p>
+
+      <!-- LEADERBOARD SECTION (On Landing Page) -->
+      <div class="mt-4 pt-3 border-t border-slate-800 text-left">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-amber-400 font-bold text-sm">🏆 实时排行榜 (LEADERBOARD)</span>
+            <span class="text-[10px] text-slate-400 font-mono">Google Sheet 同步</span>
+          </div>
+          <button id="refreshBoardBtn" class="text-xs text-orange-400 hover:text-orange-300 font-mono underline cursor-pointer">
+            刷新排行
+          </button>
+        </div>
+
+        <div class="max-h-44 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/70">
+          <table class="w-full text-left text-xs text-slate-300 border-collapse">
+            <thead class="sticky top-0 bg-slate-950/90 text-orange-300 font-scifi text-[10px] border-b border-slate-800">
+              <tr>
+                <th class="py-2 px-3 text-center">排名</th>
+                <th class="py-2 px-3">姓名</th>
+                <th class="py-2 px-2">班级</th>
+                <th class="py-2 px-3 text-right">分数</th>
+                <th class="py-2 px-3 text-right">作答用时</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody" class="divide-y divide-slate-800/60 font-mono text-xs">
+              <tr>
+                <td colspan="5" class="py-4 text-center text-slate-500">正在获取最新成绩数据...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ERROR NOTIFICATION BANNER -->
+  <div id="errorBanner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-50 max-w-lg w-11/12 p-3.5 rounded-2xl bg-rose-950/95 border border-rose-500 text-rose-200 text-xs shadow-2xl backdrop-blur-md flex items-start gap-3">
+    <svg class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+    </svg>
+    <div class="flex-1">
+      <h3 class="font-bold text-rose-300 text-sm">系统通知 (System Alert)</h3>
+      <p id="errorMessage" class="text-xs mt-0.5 leading-relaxed">摄像头或AI模型初始化未完成。</p>
+    </div>
+    <button onclick="hideError()" class="text-rose-400 hover:text-white font-bold px-2 py-1 text-sm cursor-pointer">✕</button>
+  </div>
+
+  <!-- VICTORY / MISSION COMPLETE MODAL -->
+  <div id="gameOverModal" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4">
+    <div class="hud-panel max-w-md w-full p-6 sm:p-8 rounded-3xl text-center border border-orange-500/70 shadow-[0_0_60px_rgba(249,115,22,0.4)]">
+      <h2 id="endTitle" class="font-scifi font-black text-2xl sm:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-200 to-orange-500 mb-1">
+        MISSION ACCOMPLISHED!
+      </h2>
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">科学第六课《热》训练完成</p>
+
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <div class="bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 block font-mono">得分</span>
+          <span id="finalScore" class="font-scifi font-extrabold text-xl text-emerald-400">0</span>
+        </div>
+        <div class="bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 block font-mono">最高连击</span>
+          <span id="finalCombo" class="font-scifi font-extrabold text-xl text-amber-400">x0</span>
+        </div>
+        <div class="bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 block font-mono">总用时</span>
+          <span id="finalTime" class="font-scifi font-extrabold text-xl text-sky-400">00:00</span>
+        </div>
+      </div>
+
+      <div class="text-center mb-4">
+        <span class="text-xs text-slate-400 block font-mono mb-1">科学军衔评级</span>
+        <div id="starRating" class="text-2xl text-yellow-400 tracking-widest font-bold">★★★</div>
+        <p id="gradeFeedback" class="text-xs text-orange-300 mt-1 font-medium">优异的热能科学学者！</p>
+      </div>
+
+      <div id="cloudStatusNotice" class="text-[11px] text-amber-300 font-mono mb-4 bg-orange-950/50 p-2 rounded-xl border border-orange-500/30">
+        正在同步成绩至 Google Sheets 排行榜...
+      </div>
+
+      <button id="playAgainBtn" class="w-full py-3.5 px-6 rounded-2xl font-scifi font-extrabold text-sm tracking-wider text-slate-950 bg-gradient-to-r from-orange-400 to-amber-300 hover:from-orange-300 hover:to-amber-200 transform active:scale-95 transition-all shadow-[0_0_25px_rgba(249,115,22,0.6)] cursor-pointer">
+        返回首页查看排名
+      </button>
+      <p class="text-[11px] text-orange-300/60 mt-3 font-mono">HEAT STRIKE · Created by MR WILLSON</p>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+     * 1. GOOGLE APPS SCRIPT URL & CONFIG
+     * ========================================================= */
+    // 将您的 Google Apps Script 部署 URL 粘贴在此处。如果为空，将使用内建本地模拟存储保障正常运行。
+    const GOOGLE_SCRIPT_URL = ""; 
+
+    /* =========================================================
+     * 2. AUDIO SYNTHESIZER (Pure Web Audio API - Zero External Files)
+     * ========================================================= */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playTone(freq, type, duration, gainVal = 0.15) {
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {}
+      }
+      hoverBeep() {
+        this.playTone(850, 'sine', 0.05, 0.05);
+      }
+      chargeTick(progress) {
+        const freq = 400 + (progress * 600);
+        this.playTone(freq, 'triangle', 0.04, 0.06);
+      }
+      laserZap() {
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(980, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.18);
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.2);
+        } catch(e) {}
+      }
+      correctChime() {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          setTimeout(() => this.playTone(freq, 'sine', 0.22, 0.16), idx * 60);
+        });
+      }
+      wrongBuzz() {
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+          osc.frequency.setValueAtTime(110, this.ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.28);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.28);
+        } catch(e){}
+      }
+      grabSound() {
+        this.playTone(520, 'sine', 0.12, 0.14);
+      }
+      matchFanfare() {
+        const notes = [440, 554.37, 659.25, 880];
+        notes.forEach((f, i) => setTimeout(() => this.playTone(f, 'triangle', 0.25, 0.15), i * 70));
+      }
+    }
+    const audio = new SoundEngine();
+
+    /* =========================================================
+     * 3. 30 CURRICULUM QUESTIONS (Unit 6: Heat - 五年级科学)
+     * ========================================================= */
+    const GAME_QUESTIONS = [
+      {
+        type: 'standard',
+        tag: '热与温度的定义',
+        question: "什么是【热】？",
+        hint: "热能够使物质变暖或升温。",
+        options: [
+          { text: "可以把物质变热的一种能", correct: true },
+          { text: "物体的冷热程度读数", correct: false },
+          { text: "测量温度的专门仪器", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '热与温度的定义',
+        question: "物体的【冷热程度】称为什么？",
+        hint: "我们可以通过仪器精确测量它的数值。",
+        options: [
+          { text: "温度", correct: true },
+          { text: "热能", correct: false },
+          { text: "体积", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '热的传递规律',
+        question: "热在物体之间总是怎样传递的？",
+        hint: "思考温度高低之间的热量流动方向。",
+        options: [
+          { text: "从温度较高处传到温度较低处", correct: true },
+          { text: "从温度较低处传到温度较高处", correct: false },
+          { text: "从体积较小处传到体积较大处", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '温度测量单位',
+        question: "在科学中，我们最常用的温度测量单位是：",
+        hint: "常见符号为 ℃。",
+        options: [
+          { text: "摄氏度 (℃)", correct: true },
+          { text: "毫升 (ml)", correct: false },
+          { text: "毫米 (mm)", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '温度计构造',
+        question: "实验室温度计里通常装有什么液体？",
+        hint: "这种液体遇热上升，遇冷下降。",
+        options: [
+          { text: "水银或酒精", correct: true },
+          { text: "自来水或纯水", correct: false },
+          { text: "植物油或糖水", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '触觉与测量',
+        question: "为什么我们不能单凭【触觉】来确认物体的准确温度？",
+        hint: "人体皮肤的感受是主观的，会受环境影响。",
+        options: [
+          { text: "触觉无法准确得知温度的具体数值", correct: true },
+          { text: "人手碰到物体就会吸走所有热量", correct: false },
+          { text: "人的皮肤完全感觉不到冷热", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '温度计使用方法',
+        question: "使用温度计时，应该以怎样的方式拿取捏手处？",
+        hint: "保持垂直，避免手温影响测试结果。",
+        options: [
+          { text: "以直立的方式拿着捏手处", correct: true },
+          { text: "用手握住底部的玻璃泡", correct: false },
+          { text: "横放平躺在水底", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '温度计使用方法',
+        question: "将温度计浸入烧杯的水里时，玻璃泡的位置应当：",
+        hint: "避免容器本身吸收热量产生误差。",
+        options: [
+          { text: "完全浸入水中，不碰到杯底和杯壁", correct: true },
+          { text: "紧贴烧杯底以测底层温度", correct: false },
+          { text: "紧贴烧杯壁以固定位置", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '读取读数规范',
+        question: "读取【水银温度计】读数时，正确的视线必须：",
+        hint: "水银液面中间向上凸起。",
+        options: [
+          { text: "与水银柱凸弯月面的最高点平行", correct: true },
+          { text: "从上方斜45度俯视读数", correct: false },
+          { text: "与两边边缘最低点平行", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '读取读数规范',
+        question: "读取【酒精温度计】读数时，正确的视线必须：",
+        hint: "酒精液面中间向下凹陷。",
+        options: [
+          { text: "与酒精柱凹弯月面的最低点平行", correct: true },
+          { text: "与酒精柱两侧最高点平行", correct: false },
+          { text: "从下方仰视液面读数", correct: false }
+        ]
+      },
+      /* STAGE 11: SPECIAL MATCHING CHALLENGE #1 (应用原理连线) */
+      {
+        type: 'matching',
+        tag: '挑战关卡：生活中的热胀冷缩原理',
+        question: "先按住左侧【日常难题】，拖曳到右侧对准【科学解决方法】！",
+        hint: "按住 0.6s 抓取左侧卡片，移至右侧对应卡片按住 0.6s 匹配。",
+        pairs: [
+          { word: "凹陷的乒乓球", category: "浸入热水中受热膨胀复原" },
+          { word: "拧不开的金属瓶盖", category: "浸入热水让瓶盖受热膨胀" },
+          { word: "紧套在一起的玻璃杯", category: "上杯加入冰块受冷收缩" }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '读数时机',
+        question: "什么时候才能读取温度计上的读数？",
+        hint: "液体热胀冷缩需要一定的时间达到平衡。",
+        options: [
+          { text: "确认水银柱或酒精柱停止移动后", correct: true },
+          { text: "刚放入水里的那一瞬间", correct: false },
+          { text: "把温度计拿出水面擦干后", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '水的冰点',
+        question: "水开始凝固变成冰块时的温度被称为：",
+        hint: "冰点对应标准气压下的 0℃。",
+        options: [
+          { text: "冰点 (0℃)", correct: true },
+          { text: "沸点 (100℃)", correct: false },
+          { text: "常温 (27℃)", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '水的沸点',
+        question: "水开始剧烈沸腾变成水蒸气时的温度被称为：",
+        hint: "沸腾时的恒定温度。",
+        options: [
+          { text: "沸点 (100℃)", correct: true },
+          { text: "冰点 (0℃)", correct: false },
+          { text: "凝固点 (-10℃)", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '沸水持续加热',
+        question: "当水达到 100℃ 沸点后仍持续大火加热，水的温度会：",
+        hint: "热能被用于转化为水蒸气状态。",
+        options: [
+          { text: "保持不变 (维持在100℃)", correct: true },
+          { text: "持续迅速上升至200℃", correct: false },
+          { text: "温度立即下降", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '自然冷却',
+        question: "将一杯 90℃ 的热水静置在 25℃ 的室温环境中，几小时后水温会：",
+        hint: "热量持续向周围环境散失。",
+        options: [
+          { text: "逐渐下降至 25℃ 并保持不变", correct: true },
+          { text: "一直下降直到结冰 0℃", correct: false },
+          { text: "永远保持在 90℃", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '热对物质的影响',
+        question: "物质受热（吸收热量）后，通常会发生什么变化？",
+        hint: "温度上升，体积增大。",
+        options: [
+          { text: "变热、温度上升、体积膨胀", correct: true },
+          { text: "变冷、温度下降、体积收缩", correct: false },
+          { text: "变热、温度下降、体积收缩", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '热对物质的影响',
+        question: "物质散热（失去热量）后，通常会表现为：",
+        hint: "温度下降，体积缩小。",
+        options: [
+          { text: "变冷、温度下降、体积收缩", correct: true },
+          { text: "变热、温度上升、体积膨胀", correct: false },
+          { text: "变冷、温度上升、体积不变", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '固体热胀冷缩实验',
+        question: "在铜球与铁环实验中，加热后的铜球无法穿过铁环，原因是：",
+        hint: "铜球吸收热能之后体积改变。",
+        options: [
+          { text: "铜球受热后体积膨胀", correct: true },
+          { text: "铁环遇热后收缩变窄", correct: false },
+          { text: "铜球的重量突然增加了", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '固体热胀冷缩实验',
+        question: "若要让受热膨胀无法穿过铁环的铁球重新穿过，可以：",
+        hint: "让铁球散热收缩。",
+        options: [
+          { text: "将铁球放入冷水中散热降温", correct: true },
+          { text: "继续用喷灯对铁球加热", correct: false },
+          { text: "把铁环放入冷水中冷冻", correct: false }
+        ]
+      },
+      /* STAGE 21: SPECIAL MATCHING CHALLENGE #2 (工程设计原因匹配) */
+      {
+        type: 'matching',
+        tag: '挑战关卡：公共设施工程智慧',
+        question: "请将【公共设施设计】与对应的【防范热胀冷缩目的】进行连线！",
+        hint: "按住左侧设施 0.6s，再指向右侧目的按住 0.6s 完成对接。",
+        pairs: [
+          { word: "两电线杆间电线松弛", category: "防天冷收缩扯断" },
+          { word: "铁轨连接处留空隙", category: "防天热膨胀变形" },
+          { word: "人行道砖块留缝隙", category: "防天热膨胀挤裂" }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '液体热胀冷缩',
+        question: "把盛满红墨水的细玻璃管锥形瓶浸入【热水】中，水柱会：",
+        hint: "液体受热时的体积反应。",
+        options: [
+          { text: "水柱液面明显上升", correct: true },
+          { text: "水柱液面迅速下降", correct: false },
+          { text: "水柱完全静止不变", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '液体热胀冷缩',
+        question: "接着将装有红墨水的装置改放入【冷水】中，水柱液面会：",
+        hint: "液体散热时的体积反应。",
+        options: [
+          { text: "水柱液面下降", correct: true },
+          { text: "水柱液面继续上升", correct: false },
+          { text: "水瞬间全部蒸发", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '气体热胀冷缩',
+        question: "玻璃瓶口套着气球并放入热水中，气球胀大的根本原因是：",
+        hint: "气体受热膨胀充满气球。",
+        options: [
+          { text: "瓶内的空气受热膨胀", correct: true },
+          { text: "外面的热水渗进了气球里", correct: false },
+          { text: "玻璃瓶本身受热收缩变小", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '气体热胀冷缩',
+        question: "将胀大的气球瓶改放进冷水里，气球又会变瘪，说明了：",
+        hint: "气体散热时的变化。",
+        options: [
+          { text: "瓶内的空气散热收缩", correct: true },
+          { text: "气球的橡胶遇冷融化了", correct: false },
+          { text: "空气从瓶口完全漏光了", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '工程设施应用',
+        question: "高架桥梁和水泥桥面留有锯齿状伸缩缝，主要作用是：",
+        hint: "给炎热时桥面受热留有余地。",
+        options: [
+          { text: "防止炎热夏天桥梁膨胀相互挤压破裂", correct: true },
+          { text: "为了减少桥面混凝土的施工重量", correct: false },
+          { text: "让汽车行驶时发出减速提示音", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '生活故障分析',
+        question: "炎热的中午，客厅地面瓷砖突然破裂拱起，最可能的原因是：",
+        hint: "瓷砖膨胀时缺少活动空间。",
+        options: [
+          { text: "瓷砖受热膨胀，缺乏足够的伸缩间隙", correct: true },
+          { text: "天气太冷导致瓷砖剧烈收缩", correct: false },
+          { text: "室内气压突然变低造成爆裂", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '水的三态与温度',
+        question: "冰块在 0℃ 吸收热量融化成水的过程中，温度会：",
+        hint: "冰水混合状态时的吸热特性。",
+        options: [
+          { text: "保持在 0℃ 直到全部融化", correct: true },
+          { text: "立即快速跳升到 50℃", correct: false },
+          { text: "温度突然跌至 -20℃", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '综合科学思维',
+        question: "为什么实验室温度计能灵敏指示温度？它是应用了：",
+        hint: "水银或酒精的物理特性。",
+        options: [
+          { text: "液体热胀冷缩的科学原理", correct: true },
+          { text: "玻璃管遇热放大的原理", correct: false },
+          { text: "液体在高温下变成气体的原理", correct: false }
+        ]
+      },
+      {
+        type: 'standard',
+        tag: '终极热能总结',
+        question: "关于【热与物质】，以下哪项陈述是完全正确的？",
+        hint: "总结热与冷对体积和温度的影响规律。",
+        options: [
+          { text: "固体、液体和气体都有热胀冷缩的特性", correct: true },
+          { text: "只有金属固体才会发生热胀冷缩", correct: false },
+          { text: "受热时物质温度下降，体积膨胀", correct: false }
+        ]
+      }
+    ];
+
+    /* =========================================================
+     * 4. APP & LEADERBOARD STATE
+     * ========================================================= */
+    const STATE = {
+      playerName: "",
+      playerClass: "",
+      currentIndex: 0,
+      score: 0,
+      combo: 0,
+      maxCombo: 0,
+      isAnsweringLocked: false,
+      startTime: 0,
+      elapsedSeconds: 0,
+      timerInterval: null,
+
+      // Hand Tracking & Dwell State
+      cursorX: window.innerWidth / 2,
+      cursorY: window.innerHeight / 2,
+      hasHand: false,
+      currentHoverElement: null,
+      dwellStartTime: 0,
+      dwellDuration: 600, // 0.6 seconds
+
+      // Matching Challenge State
+      matching: {
+        grabbedWordItem: null,
+        completedPairs: 0,
+        connections: []
+      }
+    };
+
+    // DOM References
+    const startOverlay = document.getElementById('startOverlay');
+    const gameUI = document.getElementById('gameUI');
+    const gameOverModal = document.getElementById('gameOverModal');
+    const cursorReticle = document.getElementById('cursorReticle');
+    const dwellProgressRing = document.getElementById('dwellProgressRing');
+    const questionCounter = document.getElementById('questionCounter');
+    const scoreCounter = document.getElementById('scoreCounter');
+    const comboCounter = document.getElementById('comboCounter');
+    const timerCounter = document.getElementById('timerCounter');
+    const questionTag = document.getElementById('questionTag');
+    const questionText = document.getElementById('questionText');
+    const questionHint = document.getElementById('questionHint');
+    const leftTargetZone = document.getElementById('leftTargetZone');
+    const rightTargetZone = document.getElementById('rightTargetZone');
+    const feedbackHolo = document.getElementById('feedbackHolo');
+    const errorBanner = document.getElementById('errorBanner');
+    const errorMessage = document.getElementById('errorMessage');
+    const leaderboardBody = document.getElementById('leaderboardBody');
+    const refreshBoardBtn = document.getElementById('refreshBoardBtn');
+    const cloudStatusNotice = document.getElementById('cloudStatusNotice');
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove('hidden');
+    }
+
+    function hideError() {
+      errorBanner.classList.add('hidden');
+    }
+
+    /* TTS QUESTION NARRATION ENGINE (Web Speech API) */
+    function speakQuestion(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel(); // Stop any existing speech
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN';
+      utter.rate = 1.05;
+      utter.pitch = 1.0;
+
+      // Select natural Chinese voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const zhVoice = voices.find(v => v.lang.includes('zh') || v.lang.includes('cmn'));
+      if (zhVoice) {
+        utter.voice = zhVoice;
+      }
+      window.speechSynthesis.speak(utter);
+    }
+
+    function formatTime(totalSec) {
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    /* LEADERBOARD DATA: In-Memory / Local Cache Fallback */
+    let localLeaderboardCache = [
+      { name: "张子涵", className: "5A", score: 3200, durationSeconds: 154, durationText: "02:34" },
+      { name: "陈俊杰", className: "5 Merah", score: 2950, durationSeconds: 172, durationText: "02:52" },
+      { name: "Siti Nurhaliza", className: "5 Bijak", score: 2800, durationSeconds: 190, durationText: "03:10" },
+      { name: "黄伟伦", className: "5B", score: 2600, durationSeconds: 210, durationText: "03:30" },
+      { name: "Kavitha", className: "5A", score: 2400, durationSeconds: 225, durationText: "03:45" }
+    ];
+
+    // Fetch and render leaderboard (from Google Apps Script if URL provided)
+    async function loadLeaderboard() {
+      leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-orange-400">正在获取最新成绩...</td></tr>`;
+
+      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith("http")) {
+        try {
+          const resp = await fetch(GOOGLE_SCRIPT_URL);
+          const data = await resp.json();
+          if (data && data.status === "success" && Array.isArray(data.leaderboard)) {
+            renderLeaderboardTable(data.leaderboard);
+            return;
+          }
+        } catch (e) {
+          console.warn("Apps Script fetch error, showing local cache:", e);
+        }
+      }
+
+      // Default to sorted local cache
+      localLeaderboardCache.sort((a, b) => b.score - a.score || a.durationSeconds - b.durationSeconds);
+      renderLeaderboardTable(localLeaderboardCache);
+    }
+
+    function renderLeaderboardTable(list) {
+      if (!list || list.length === 0) {
+        leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-slate-500">暂无排行记录，成为第一位勇士吧！</td></tr>`;
+        return;
+      }
+      leaderboardBody.innerHTML = list.map((item, idx) => {
+        let rankBadge = `${idx + 1}`;
+        if (idx === 0) rankBadge = `<span class="text-amber-400 font-black">🥇 1</span>`;
+        else if (idx === 1) rankBadge = `<span class="text-slate-300 font-black">🥈 2</span>`;
+        else if (idx === 2) rankBadge = `<span class="text-amber-600 font-black">🥉 3</span>`;
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-1.5 px-3 text-center font-bold">${rankBadge}</td>
+            <td class="py-1.5 px-3 font-semibold text-white">${item.name}</td>
+            <td class="py-1.5 px-2 text-slate-400">${item.className}</td>
+            <td class="py-1.5 px-3 text-right text-emerald-400 font-bold">${item.score}</td>
+            <td class="py-1.5 px-3 text-right text-sky-300 font-mono">${item.durationText || formatTime(item.durationSeconds)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    refreshBoardBtn.addEventListener('click', loadLeaderboard);
+    loadLeaderboard();
+
+    // Push Score to Cloud & Local
+    async function submitScoreToCloud(scoreData) {
+      cloudStatusNotice.textContent = "正在将您的战绩同步至 Google Sheets 排行榜...";
+
+      // Update local memory list
+      localLeaderboardCache.push(scoreData);
+      localLeaderboardCache.sort((a, b) => b.score - a.score || a.durationSeconds - b.durationSeconds);
+
+      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith("http")) {
+        try {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(scoreData)
+          });
+          cloudStatusNotice.innerHTML = `<span class="text-emerald-400 font-bold">✓ 成绩已成功同步至 Google Sheets 排行榜！</span>`;
+          return;
+        } catch (e) {
+          console.error("Cloud push failed:", e);
+        }
+      }
+
+      cloudStatusNotice.innerHTML = `<span class="text-amber-300">✓ 成绩已记录在本地排行榜！(已就绪)</span>`;
+    }
+
+    /* =========================================================
+     * 5. PARTICLES & LASER CANVAS FX ENGINE
+     * ========================================================= */
+    const fxCanvas = document.getElementById('fxCanvas');
+    const fxCtx = fxCanvas.getContext('2d');
+    let particles = [];
+    let laserBeams = [];
+
+    function resizeFxCanvas() {
+      fxCanvas.width = window.innerWidth;
+      fxCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeFxCanvas);
+    resizeFxCanvas();
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 2;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.alpha = 1;
+        this.size = Math.random() * 4 + 2;
+        this.decay = Math.random() * 0.02 + 0.015;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function spawnExplosion(x, y, isCorrect) {
+      const color = isCorrect ? '#22c55e' : '#ef4444';
+      for (let i = 0; i < 35; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+    function addLaserFlash(x1, y1, x2, y2, color = '#f97316') {
+      laserBeams.push({
+        x1, y1, x2, y2, color,
+        alpha: 1.0,
+        decay: 0.06
+      });
+    }
+
+    /* =========================================================
+     * 6. GAMEPLAY STAGE RENDERERS & ANSWER INTERACTION
+     * ========================================================= */
+    function updateScoreBoard() {
+      scoreCounter.textContent = String(STATE.score).padStart(4, '0');
+      comboCounter.textContent = `x${STATE.combo}`;
+      questionCounter.textContent = `${String(STATE.currentIndex + 1).padStart(2, '0')} / ${GAME_QUESTIONS.length}`;
+      if (STATE.combo > STATE.maxCombo) {
+        STATE.maxCombo = STATE.combo;
+      }
+    }
+
+    function showHoloFeedback(text, isGood) {
+      feedbackHolo.textContent = text;
+      feedbackHolo.className = `absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-scifi text-2xl sm:text-3xl font-extrabold tracking-wider px-6 py-2.5 rounded-2xl border z-30 transition-all text-center ${
+        isGood 
+          ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_35px_#22c55e]' 
+          : 'bg-rose-950/90 border-rose-400 text-rose-300 shadow-[0_0_35px_#ef4444]'
+      }`;
+      feedbackHolo.classList.remove('hidden');
+      setTimeout(() => {
+        feedbackHolo.classList.add('hidden');
+      }, 1000);
+    }
+
+    function loadCurrentStage() {
+      STATE.isAnsweringLocked = false;
+      STATE.currentHoverElement = null;
+      STATE.dwellStartTime = 0;
+      updateDwellRing(0);
+
+      leftTargetZone.innerHTML = '';
+      rightTargetZone.innerHTML = '';
+
+      if (STATE.currentIndex >= GAME_QUESTIONS.length) {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        showGameOver();
+        return;
+      }
+
+      const q = GAME_QUESTIONS[STATE.currentIndex];
+      questionTag.textContent = q.tag;
+      questionText.textContent = q.question;
+      questionHint.textContent = q.hint;
+      updateScoreBoard();
+
+      // Automatically speak the question out loud
+      speakQuestion(q.question);
+
+      if (q.type === 'standard') {
+        renderStandardQuestion(q);
+      } else if (q.type === 'matching') {
+        renderMatchingChallenge(q);
+      }
+    }
+
+    function renderStandardQuestion(q) {
+      // 1. Clone & shuffle options so the correct answer is never predictably on the left
+      const shuffledOptions = [...q.options]
+        .map(opt => ({ ...opt, origIndex: 0 }))
+        .sort(() => Math.random() - 0.5);
+
+      // 2. Randomly assign which options go to left vs right flank zone
+      // e.g. For 3 options: randomly pick 1 for left and 2 for right, OR 2 for left and 1 for right
+      const totalCount = shuffledOptions.length;
+      const leftTargetCount = Math.random() < 0.5 ? Math.ceil(totalCount / 2) : Math.floor(totalCount / 2);
+
+      shuffledOptions.forEach((opt, idx) => {
+        const btn = document.createElement('div');
+        btn.className = 'card-choice p-3 sm:p-4 rounded-2xl cursor-pointer text-left relative overflow-hidden select-none pointer-events-auto';
+        btn.dataset.correct = opt.correct ? "true" : "false";
+        btn.dataset.action = "strike-standard";
+
+        btn.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-scifi text-xs font-bold px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-400/40">
+              OPTION 0${idx + 1}
+            </span>
+            <span class="text-[10px] text-slate-400 uppercase font-mono tracking-wider">保持 0.6S 锁定</span>
+          </div>
+          <div class="text-sm sm:text-base font-bold text-white leading-snug">
+            ${opt.text}
+          </div>
+        `;
+
+        if (idx < leftTargetCount) {
+          leftTargetZone.appendChild(btn);
+        } else {
+          rightTargetZone.appendChild(btn);
+        }
+      });
+    }
+
+    function renderMatchingChallenge(q) {
+      STATE.matching.grabbedWordItem = null;
+      STATE.matching.completedPairs = 0;
+      STATE.matching.connections = [];
+
+      const shuffledCategories = [...q.pairs].sort(() => Math.random() - 0.5);
+
+      // Left Column (Problems)
+      q.pairs.forEach((pair, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card-choice p-3 rounded-2xl text-left pointer-events-auto relative';
+        card.dataset.type = "match-left";
+        card.dataset.word = pair.word;
+        card.dataset.category = pair.category;
+        card.dataset.matched = "false";
+        card.id = `match-left-${idx}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="font-scifi text-[10px] text-amber-400 font-bold tracking-widest uppercase">科学现象</span>
+            <span class="text-[9px] text-slate-400">HOLD 抓取</span>
+          </div>
+          <div class="text-xs sm:text-sm font-bold text-white">${pair.word}</div>
+        `;
+        leftTargetZone.appendChild(card);
+      });
+
+      // Right Column (Principles)
+      shuffledCategories.forEach((pair, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card-choice p-3 rounded-2xl text-right pointer-events-auto relative';
+        card.dataset.type = "match-right";
+        card.dataset.category = pair.category;
+        card.dataset.matched = "false";
+        card.id = `match-right-${idx}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between flex-row-reverse mb-0.5">
+            <span class="font-scifi text-[10px] text-sky-400 font-bold tracking-widest uppercase">解决对策</span>
+            <span class="text-[9px] text-slate-400">HOLD 匹配</span>
+          </div>
+          <div class="text-xs sm:text-sm font-bold text-white">${pair.category}</div>
+        `;
+        rightTargetZone.appendChild(card);
+      });
+    }
+
+    function handleStandardStrike(element) {
+      STATE.isAnsweringLocked = true;
+      const isCorrect = element.dataset.correct === "true";
+      const rect = element.getBoundingClientRect();
+      const targetCenterX = rect.left + rect.width / 2;
+      const targetCenterY = rect.top + rect.height / 2;
+
+      audio.laserZap();
+      addLaserFlash(STATE.cursorX, STATE.cursorY, targetCenterX, targetCenterY, isCorrect ? '#22c55e' : '#ef4444');
+      spawnExplosion(targetCenterX, targetCenterY, isCorrect);
+
+      if (isCorrect) {
+        audio.correctChime();
+        STATE.combo += 1;
+        const comboMultiplier = Math.max(1, STATE.combo);
+        const gainedScore = 100 * comboMultiplier;
+        STATE.score += gainedScore;
+        element.classList.add('matched');
+        showHoloFeedback(`正确! +${gainedScore}`, true);
+      } else {
+        audio.wrongBuzz();
+        STATE.combo = 0;
+        element.style.borderColor = '#ef4444';
+        element.style.background = 'rgba(239, 68, 68, 0.4)';
+        showHoloFeedback("答案错误!", false);
+      }
+      updateScoreBoard();
+
+      setTimeout(() => {
+        STATE.currentIndex++;
+        loadCurrentStage();
+      }, 1200);
+    }
+
+    function handleMatchInteraction(element) {
+      const matchType = element.dataset.type;
+      const isMatched = element.dataset.matched === "true";
+      if (isMatched) return;
+
+      const rect = element.getBoundingClientRect();
+      const elemCenterX = rect.left + rect.width / 2;
+      const elemCenterY = rect.top + rect.height / 2;
+
+      // 1. Grab item on Left
+      if (matchType === "match-left") {
+        if (STATE.matching.grabbedWordItem) {
+          STATE.matching.grabbedWordItem.classList.remove('grabbed');
+        }
+        STATE.matching.grabbedWordItem = element;
+        element.classList.add('grabbed');
+        audio.grabSound();
+        spawnExplosion(elemCenterX, elemCenterY, true);
+        showHoloFeedback("已抓取现象！请移到右侧匹配原理", true);
+      } 
+      // 2. Match item on Right
+      else if (matchType === "match-right") {
+        if (!STATE.matching.grabbedWordItem) {
+          showHoloFeedback("请先在左侧按住抓取一项！", false);
+          audio.wrongBuzz();
+          return;
+        }
+
+        const grabbedElem = STATE.matching.grabbedWordItem;
+        const expectedCategory = grabbedElem.dataset.category;
+        const targetCategory = element.dataset.category;
+
+        if (expectedCategory === targetCategory) {
+          audio.laserZap();
+          audio.matchFanfare();
+          spawnExplosion(elemCenterX, elemCenterY, true);
+
+          grabbedElem.classList.remove('grabbed');
+          grabbedElem.classList.add('matched');
+          grabbedElem.dataset.matched = "true";
+
+          element.classList.add('matched');
+          element.dataset.matched = "true";
+
+          STATE.matching.connections.push({
+            elem1: grabbedElem,
+            elem2: element,
+            color: '#22c55e'
+          });
+
+          STATE.score += 250;
+          STATE.combo += 1;
+          STATE.matching.completedPairs++;
+          STATE.matching.grabbedWordItem = null;
+          updateScoreBoard();
+          showHoloFeedback("完美配对! +250", true);
+
+          if (STATE.matching.completedPairs >= 3) {
+            audio.correctChime();
+            setTimeout(() => {
+              STATE.currentIndex++;
+              loadCurrentStage();
+            }, 1200);
+          }
+        } else {
+          audio.wrongBuzz();
+          spawnExplosion(elemCenterX, elemCenterY, false);
+          showHoloFeedback("原理不匹配！重新尝试", false);
+          STATE.combo = 0;
+          updateScoreBoard();
+        }
+      }
+    }
+
+    function updateDwellRing(percent) {
+      const circumference = 251.2;
+      const offset = circumference - (circumference * percent);
+      dwellProgressRing.style.strokeDashoffset = offset;
+    }
+
+    function processDwellHover(now) {
+      if (STATE.isAnsweringLocked) return;
+
+      const elementsUnder = document.elementsFromPoint(STATE.cursorX, STATE.cursorY);
+      const targetCard = elementsUnder.find(el => el.classList && el.classList.contains('card-choice'));
+
+      if (targetCard && targetCard.dataset.matched !== "true") {
+        if (STATE.currentHoverElement !== targetCard) {
+          if (STATE.currentHoverElement) {
+            STATE.currentHoverElement.classList.remove('targeting');
+          }
+          STATE.currentHoverElement = targetCard;
+          STATE.dwellStartTime = now;
+          targetCard.classList.add('targeting');
+          audio.hoverBeep();
+        }
+
+        const elapsed = now - STATE.dwellStartTime;
+        const progress = Math.min(1.0, elapsed / STATE.dwellDuration);
+        updateDwellRing(progress);
+
+        if (Math.random() < 0.25) {
+          audio.chargeTick(progress);
+        }
+
+        if (progress >= 1.0) {
+          updateDwellRing(0);
+          STATE.dwellStartTime = now;
+
+          if (targetCard.dataset.action === "strike-standard") {
+            handleStandardStrike(targetCard);
+          } else if (targetCard.dataset.type === "match-left" || targetCard.dataset.type === "match-right") {
+            handleMatchInteraction(targetCard);
+          }
+        }
+      } else {
+        if (STATE.currentHoverElement) {
+          STATE.currentHoverElement.classList.remove('targeting');
+          STATE.currentHoverElement = null;
+        }
+        STATE.dwellStartTime = 0;
+        updateDwellRing(0);
+      }
+    }
+
+    function showGameOver() {
+      STATE.isAnsweringLocked = true;
+      clearInterval(STATE.timerInterval);
+
+      const timeText = formatTime(STATE.elapsedSeconds);
+      document.getElementById('finalScore').textContent = STATE.score;
+      document.getElementById('finalCombo').textContent = `x${STATE.maxCombo}`;
+      document.getElementById('finalTime').textContent = timeText;
+      
+      const starRating = document.getElementById('starRating');
+      const gradeFeedback = document.getElementById('gradeFeedback');
+      
+      if (STATE.score >= 3200) {
+        starRating.textContent = "★★★★★";
+        gradeFeedback.textContent = "科学热能特级大师！对所有知识点驾轻就熟。";
+      } else if (STATE.score >= 2400) {
+        starRating.textContent = "★★★★☆";
+        gradeFeedback.textContent = "热能神枪手！概念扎实，命中率极高。";
+      } else if (STATE.score >= 1500) {
+        starRating.textContent = "★★★☆☆";
+        gradeFeedback.textContent = "优秀科学学员！已掌握绝大部分热能特性。";
+      } else {
+        starRating.textContent = "★★☆☆☆";
+        gradeFeedback.textContent = "继续加油！多多复习温度计读数和热胀冷缩原理。";
+      }
+
+      // Submit score to Google Sheets App Script / Local Cache
+      submitScoreToCloud({
+        name: STATE.playerName,
+        className: STATE.playerClass,
+        score: STATE.score,
+        total: GAME_QUESTIONS.length,
+        durationSeconds: STATE.elapsedSeconds,
+        durationText: timeText
+      });
+
+      gameOverModal.classList.remove('hidden');
+    }
+
+    document.getElementById('playAgainBtn').addEventListener('click', () => {
+      gameOverModal.classList.add('hidden');
+      gameUI.classList.add('hidden');
+      startOverlay.classList.remove('hidden');
+      loadLeaderboard();
+    });
+
+    /* =========================================================
+     * 7. MEDIAPIPE HAND LANDMARKER & CAMERA INITIALIZATION
+     * ========================================================= */
+    let handLandmarker = null;
+    let video = document.getElementById('webcam');
+    let lastVideoTime = -1;
+
+    async function initMediaPipeVision() {
+      const statusText = document.getElementById('loadingStatusText');
+      try {
+        statusText.textContent = "正在加载 MediaPipe AI 视觉引擎...";
+        const vision = await window.FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        
+        statusText.textContent = "正在构建手势关节点追踪网络...";
+        handLandmarker = await window.HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1
+        });
+        statusText.textContent = "AI 准备就绪，正在激活高清视频流...";
+        return true;
+      } catch (err) {
+        console.error("MediaPipe initialization error:", err);
+        showError("无法加载 MediaPipe 视觉模型：" + (err.message || err));
+        return false;
+      }
+    }
+
+    async function startCameraAndGame() {
+      const nameInput = document.getElementById('inputStudentName').value.trim();
+      const classInput = document.getElementById('inputStudentClass').value.trim();
+
+      if (!nameInput || !classInput) {
+        showError("请先输入学生姓名和班级，然后再开始答题！");
+        return;
+      }
+
+      // Hide system notification once inputs are validated
+      hideError();
+
+      STATE.playerName = nameInput;
+      STATE.playerClass = classInput;
+      document.getElementById('hudPlayer').textContent = `${nameInput} (${classInput})`;
+
+      audio.init();
+      const btn = document.getElementById('activateCamBtn');
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      const isAiReady = await initMediaPipeVision();
+      if (!isAiReady) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        video.addEventListener('loadeddata', () => {
+          startOverlay.classList.add('hidden');
+          gameUI.classList.remove('hidden');
+          cursorReticle.classList.remove('hidden');
+          document.getElementById('camStatusDot').className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+          document.getElementById('camStatusText').textContent = "热能追踪雷达运作中";
+
+          // Reset game values
+          STATE.currentIndex = 0;
+          STATE.score = 0;
+          STATE.combo = 0;
+          STATE.maxCombo = 0;
+          STATE.elapsedSeconds = 0;
+          STATE.startTime = Date.now();
+
+          clearInterval(STATE.timerInterval);
+          STATE.timerInterval = setInterval(() => {
+            STATE.elapsedSeconds = Math.floor((Date.now() - STATE.startTime) / 1000);
+            timerCounter.textContent = formatTime(STATE.elapsedSeconds);
+          }, 1000);
+
+          loadCurrentStage();
+          requestAnimationFrame(renderLoop);
+        });
+      } catch (camErr) {
+        console.error("Webcam access error:", camErr);
+        showError("摄像头访问被拒绝或未找到设备。请在浏览器中允许摄像头权限后重试。");
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+
+    document.getElementById('activateCamBtn').addEventListener('click', startCameraAndGame);
+
+    /* =========================================================
+     * 8. UNIFIED RENDER & GESTURE TRACKING LOOP
+     * ========================================================= */
+    function renderLoop(now) {
+      // 1. Process Video Frame with MediaPipe HandLandmarker
+      if (video.readyState >= 2 && handLandmarker) {
+        if (video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          const detection = handLandmarker.detectForVideo(video, now);
+
+          if (detection.landmarks && detection.landmarks.length > 0) {
+            STATE.hasHand = true;
+            // Index fingertip = Landmark #8
+            const indexTip = detection.landmarks[0][8];
+
+            // Mirrored horizontal coordinate: x = 1.0 - x
+            const targetX = (1.0 - indexTip.x) * window.innerWidth;
+            const targetY = indexTip.y * window.innerHeight;
+
+            // Exponential smoothing for steady aim
+            STATE.cursorX += (targetX - STATE.cursorX) * 0.45;
+            STATE.cursorY += (targetY - STATE.cursorY) * 0.45;
+
+            // Position Reticle
+            cursorReticle.style.left = `${STATE.cursorX}px`;
+            cursorReticle.style.top = `${STATE.cursorY}px`;
+            cursorReticle.style.opacity = '1';
+          } else {
+            STATE.hasHand = false;
+            cursorReticle.style.opacity = '0.35';
+          }
+        }
+      }
+
+      // 2. Process Dwell & Selection
+      if (STATE.hasHand) {
+        processDwellHover(now);
+      } else {
+        updateDwellRing(0);
+        if (STATE.currentHoverElement) {
+          STATE.currentHoverElement.classList.remove('targeting');
+          STATE.currentHoverElement = null;
+        }
+      }
+
+      // 3. Render Canvas Visual Effects
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+      // (A) Draw active grabbed word tether beam
+      if (STATE.matching.grabbedWordItem && STATE.hasHand) {
+        const rect = STATE.matching.grabbedWordItem.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+
+        fxCtx.save();
+        fxCtx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+        fxCtx.lineWidth = 3;
+        fxCtx.shadowColor = '#38bdf8';
+        fxCtx.shadowBlur = 15;
+        fxCtx.setLineDash([8, 6]);
+        fxCtx.beginPath();
+        fxCtx.moveTo(startX, startY);
+        fxCtx.lineTo(STATE.cursorX, STATE.cursorY);
+        fxCtx.stroke();
+        fxCtx.restore();
+      }
+
+      // (B) Draw persistent matched lines in Matching Challenge
+      if (STATE.matching.connections.length > 0) {
+        STATE.matching.connections.forEach(conn => {
+          const r1 = conn.elem1.getBoundingClientRect();
+          const r2 = conn.elem2.getBoundingClientRect();
+          const x1 = r1.left + r1.width / 2;
+          const y1 = r1.top + r1.height / 2;
+          const x2 = r2.left + r2.width / 2;
+          const y2 = r2.top + r2.height / 2;
+
+          fxCtx.save();
+          fxCtx.strokeStyle = conn.color;
+          fxCtx.lineWidth = 2.5;
+          fxCtx.shadowColor = conn.color;
+          fxCtx.shadowBlur = 12;
+          fxCtx.beginPath();
+          fxCtx.moveTo(x1, y1);
+          fxCtx.lineTo(x2, y2);
+          fxCtx.stroke();
+          fxCtx.restore();
+        });
+      }
+
+      // (C) Laser Beams Flash
+      for (let i = laserBeams.length - 1; i >= 0; i--) {
+        const beam = laserBeams[i];
+        fxCtx.save();
+        fxCtx.globalAlpha = Math.max(0, beam.alpha);
+        fxCtx.strokeStyle = beam.color;
+        fxCtx.shadowColor = beam.color;
+        fxCtx.shadowBlur = 20;
+        fxCtx.lineWidth = 6;
+        fxCtx.beginPath();
+        fxCtx.moveTo(beam.x1, beam.y1);
+        fxCtx.lineTo(beam.x2, beam.y2);
+        fxCtx.stroke();
+        fxCtx.restore();
+
+        beam.alpha -= beam.decay;
+        if (beam.alpha <= 0) laserBeams.splice(i, 1);
+      }
+
+      // (D) Particle Sparks
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw(fxCtx);
+        if (p.alpha <= 0) particles.splice(i, 1);
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // Safety Global Error Listener
+    window.addEventListener('error', (e) => {
+      if (e.message && e.message.includes('MediaPipe')) {
+        showError("MediaPipe CDN 加载出现异常，请确认网络连接畅通。");
+      }
+    });
+  </script>
+</body>
+</html>
