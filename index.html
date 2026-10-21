@@ -866,20 +866,64 @@
       { name: "Kavitha", className: "5A", score: 2400, durationSeconds: 225, durationText: "03:45" }
     ];
 
+    // JSONP 动态加载跨域数据，彻底解决 Google Apps Script 的 CORS 问题
+    function fetchLeaderboardJSONP(url) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'gasCallback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        const script = document.createElement('script');
+        
+        const cleanup = () => {
+          if (window[callbackName]) delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        };
+
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error("排行榜请求超时"));
+        }, 10000);
+
+        window[callbackName] = function(data) {
+          clearTimeout(timer);
+          cleanup();
+          resolve(data);
+        };
+
+        script.onerror = function() {
+          clearTimeout(timer);
+          cleanup();
+          reject(new Error("网络或脚本加载错误"));
+        };
+
+        const delimiter = url.includes('?') ? '&' : '?';
+        script.src = `${url}${delimiter}callback=${callbackName}&t=${Date.now()}`;
+        document.body.appendChild(script);
+      });
+    }
+
     // Fetch and render leaderboard (from Google Apps Script if URL provided)
     async function loadLeaderboard() {
-      leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-orange-400">正在获取最新成绩...</td></tr>`;
+      leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-orange-400 font-mono animate-pulse">正在从 Google Sheets 同步实时排行...</td></tr>`;
 
       if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith("http")) {
+        // 优先使用 JSONP 请求，规避浏览器的 CORS 限制与 Apps Script 重定向问题
         try {
-          const resp = await fetch(GOOGLE_SCRIPT_URL);
-          const data = await resp.json();
+          const data = await fetchLeaderboardJSONP(GOOGLE_SCRIPT_URL);
           if (data && data.status === "success" && Array.isArray(data.leaderboard)) {
             renderLeaderboardTable(data.leaderboard);
             return;
           }
-        } catch (e) {
-          console.warn("Apps Script fetch error, showing local cache:", e);
+        } catch (jsonpErr) {
+          console.warn("JSONP 读取失败，尝试原生 fetch 兜底:", jsonpErr);
+          try {
+            const resp = await fetch(GOOGLE_SCRIPT_URL);
+            const data = await resp.json();
+            if (data && data.status === "success" && Array.isArray(data.leaderboard)) {
+              renderLeaderboardTable(data.leaderboard);
+              return;
+            }
+          } catch (fetchErr) {
+            console.warn("Apps Script 原生 fetch 失败，使用本地缓存:", fetchErr);
+          }
         }
       }
 
@@ -890,7 +934,7 @@
 
     function renderLeaderboardTable(list) {
       if (!list || list.length === 0) {
-        leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-slate-500">暂无排行记录，成为第一位勇士吧！</td></tr>`;
+        leaderboardBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500">暂无排行记录，成为第一位勇士吧！</td></tr>`;
         return;
       }
       leaderboardBody.innerHTML = list.map((item, idx) => {
@@ -930,7 +974,9 @@
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(scoreData)
           });
-          cloudStatusNotice.innerHTML = `<span class="text-emerald-400 font-bold">✓ 成绩已成功同步至 Google Sheets 排行榜！</span>`;
+          cloudStatusNotice.innerHTML = `<span class="text-emerald-400 font-bold">✓ 成绩已成功同步至 Google Sheets！</span>`;
+          // 提交成功后延迟 1 秒在后台重新拉取排行榜
+          setTimeout(loadLeaderboard, 1200);
           return;
         } catch (e) {
           console.error("Cloud push failed:", e);
